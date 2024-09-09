@@ -73,7 +73,7 @@
         To speed up the process, I implement an image pyramid as the search algorithm instead.
         The goal is to create a stack of images with different resolutions, with the lowest resolution image at the top
         and the highest resolution at the bottom (thus resembling a pyramid), and search for an objective in all of them by gradually
-        increasing the resolution (i.e. going down the pyramid). reducing the search window until you reach the final image
+        increasing the resolution (i.e. going down the pyramid), reducing the search window until you reach the final image.
         The intuition is that if something can be localized in low resolution, then we know the approximate window where such an objective
         exists in. So, we can reduce the search window for the next higher resolution image until we pinpoint the optimum in final state.
         <br><br>
