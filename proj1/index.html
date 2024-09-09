@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>CS 180/280A Project 1</title>
+
+    <style>
+        * {
+          box-sizing: border-box;
+        }
+        
+        .column {
+          float: left;
+          width: 33.33%;
+          padding: 5px;
+        }
+        
+        /* Clearfix (clear floats) */
+        .row::after {
+          content: "";
+          clear: both;
+          display: table;
+        }
+
+        figcaption {
+        text-align: center;
+        }
+
+    </style>
+</head>
+
+<body>
+
+    <h1>CS 180/280A Project 1: Colorizing the Prokudin-Gorskii Photo Collection</h1>
+    <h2>Gina Wu (Fall 2024)</h2>
+
+    <p>
+        Prokudin-Gorskii images consist of three glass plate negatives in red, green, and blue respectively. 
+        The goal of this project is to take these digitalized images and automatically align them to output a single color image. 
+        Since these images are slightly offset, we want to identify the best translation for each color plates to 
+        minimize visual artifacts.
+    </p>
+    <hr>
+
+    <h2>Approach</h2>
+
+    <p>
+        The digitalized images are given as three vertically stacked images. 
+        I first evenly divide each image into three along its height to isolate the color plates. 
+        In the naive single-scale implementation, I exhaustively search over a window of possible displacements by 
+        sliding the green and red plates over the blue. 
+        This window is set as 10 percent of the height and width of each image operated upon.
+        Then for every alignment, I calculate a similarity score to determine the best translation. 
+        Two simple metrics, mean squared error (MSE) and normalized cross correlation (NCC), are implemented.
+        NCC yields much better results than MSE on simple images including
+        <span style="font-family: monospace">monastery.jpg</span>.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/monastery_mse.jpg" alt="cathedral" style="width:100%">
+            <figcaption> MSE </figcaption> 
+        </div>
+
+        <div class="column">
+            <img src="media/monastery_ncc.jpg" alt="icon" style="width:100%">
+            <figcaption> NCC </figcaption> 
+        </div>
+    </div>
+        
+    <p>
+        While the naive exhaustive search works for smaller images, the problem quickly becomes intractable with high resolution inputs.
+        To speed up the process, I implement an image pyramid as the search algorithm instead.
+        The goal is to create a stack of images with different resolutions, with the lowest resolution image at the top
+        and the highest resolution at the bottom (thus resembling a pyramid), and search for an objective in all of them by gradually
+        increasing the resolution (i.e. going down the pyramid). reducing the search window until you reach the final image
+        The intuition is that if something can be localized in low resolution, then we know the approximate window where such an objective
+        exists in. So, we can reduce the search window for the next higher resolution image until we pinpoint the optimum in final state.
+        <br><br>
+
+        I shrink each image to 100 pixels on its shortest side as the minimum resolution image, calculated as 
+        <span style="font-family: monospace">log2(min(input.shape) / 100)</span>, and the initial search window as 20 percent of
+        its width and height. Starting from there, I align the image exhaustively as before at its current scale and update
+        the best translation so far. Then, I reduce the search window by a factor of 4 and scale up the image by 2.
+        From here, I iterate on the exhaustive search until reaching the original resolution, ensuring that the image is aligned
+        according to its current scale and last best displacement every time.
+        <br><br>
+
+        Additionally, I crop out the edge pixels and leave 85 percent of each image with respect to their centers when calculating similarity scores.
+        This refinement significantly improves alignment performance, especially in large images like 
+        <span style="font-family: monospace">lady.tif</span> as shown below.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/lady_nocrop.jpg" alt="lady_nocrop" style="width:100%">
+            <figcaption> NCC, no crop </figcaption> 
+        </div>
+
+        <div class="column">
+            <img src="media/lady_crop.jpg" alt="lady_crop" style="width:100%">
+            <figcaption> NCC, crop </figcaption> 
+        </div>
+    </div>
+        
+    <p>
+        Below is the execution time of each image alignment using NCC with crop as the similarity metric and 
+        multiscale pyramid search on Google Colab CPU.
+    </p>
+
+    <pre>
+        Image: cathedral.jpg             | Time: 6.149 sec
+        Image: church.tif                | Time: 2.424 sec
+        Image: emir.tif                  | Time: 2.459 sec
+        Image: harvesters.tif            | Time: 2.489 sec
+        Image: icon.tif                  | Time: 4.627 sec
+        Image: lady.tif                  | Time: 2.583 sec
+        Image: melons.tif                | Time: 2.509 sec
+        Image: monastery.jpg             | Time: 4.476 sec
+        Image: onion_church.tif          | Time: 4.137 sec
+        Image: sculpture.tif             | Time: 3.678 sec
+        Image: self_portrait.tif         | Time: 2.706 sec
+        Image: tobolsk.jpg               | Time: 4.157 sec
+        Image: three_generations.tif     | Time: 3.334 sec
+        Image: train.tif                 | Time: 4.919 sec
+    </pre>
+
+    <p>
+        This approach yields satisfactory results.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/cathedral_naive.jpg" alt="cathedral" style="width:100%">
+            <figcaption><span style="font-family: monospace">cathedral.jpg</span></figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/icon_naive.jpg" alt="icon" style="width:100%">
+            <figcaption><span style="font-family: monospace">icon.tif</span></figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/train_naive.jpg" alt="train" style="width:100%">
+            <figcaption><span style="font-family: monospace">train.tif</span></figcaption>
+        </div>
+    </div>
+    <hr>
+
+    <h2>Bells & Whistles</h2>
+
+    <p>
+        <b>Edge Detection:</b> While most images had good results with calculating NCC based on RGB similarity, 
+        <span style="font-family: monospace">emir.tif</span> had a particularly misaligned red plate. 
+        I apply a Gaussian blur to smooth and denoise the image, and then
+        featurize the raw image plates through Canny edge detection and calculate similarity metric based on edges.
+        This allows for a better similarity scoring based on perception and structure of objects, rather than raw
+        pixel differences. The tradeoff is a much slower runtime, therefore I don't apply this method to pictures that 
+        already look aligned.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/emir_naive.jpg" alt="emir_ncc" style="width:100%">
+            <figcaption> RGB Similarity </figcaption> 
+        </div>
+
+        <div class="column">
+            <img src="media/emir_edge.jpg" alt="emir_edge" style="width:100%">
+            <figcaption> Canny Edge Detection </figcaption> 
+        </div>
+    </div> 
+    <hr>   
+
+    <h2>Results</h2>
+    <p>
+        <b>Edge Detection:</b> The final results are all calculated from NCC based on RGB similarity, except for
+        <span style="font-family: monospace">emir.tif</span> which operated on edge detection. The artifacts on 
+        image edges are manually cropped.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/cathedral.jpg" alt="cathedral" style="width:100%">
+            <figcaption><span style="font-family: monospace">cathedral.jpg</span><br>
+            G: (2, 5); R: (3, 12)
+            </figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/church.jpg" alt="church" style="width:100%">
+            <figcaption><span style="font-family: monospace">church.tif</span><br>
+                G: (4, 26); R: (-4, 58)
+            </figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/emir.jpg" alt="emir" style="width:100%">
+            <figcaption><span style="font-family: monospace">emir.tif</span><br>
+                G: (24, 50); R: (40, 106)
+            </figcaption>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/harvesters.jpg" alt="harvesters" style="width:100%">
+            <figcaption><span style="font-family: monospace">harvesters.tif</span><br>
+                G: (16, 60); R: (14, 124)
+            </figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/icon.jpg" alt="icon" style="width:100%">
+            <figcaption><span style="font-family: monospace">icon.tif</span><br>
+                G: (16, 40); R: (22, 90)
+            </figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/lady.jpg" alt="lady" style="width:100%">
+            <figcaption><span style="font-family: monospace">lady.tif</span><br>
+                G: (8, 56); R: (12, 116)
+            </figcaption>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/melons.jpg" alt="melons" style="width:100%">
+            <figcaption><span style="font-family: monospace">melons.tif</span><br>
+                G: (10, 82); R: (14, 178)
+            </figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/monastery.jpg" alt="monastery" style="width:100%">
+            <figcaption><span style="font-family: monospace">monastery.jpg</span><br>
+                G: (2, -3); R: (2, 3)
+            </figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/onion_church.jpg" alt="onion_church" style="width:100%">
+            <figcaption><span style="font-family: monospace">onion_church.tif</span><br>
+                G: (26, 52); R: (36, 108)
+            </figcaption>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/sculpture.jpg" alt="sculpture" style="width:100%">
+            <figcaption><span style="font-family: monospace">sculpture.tif</span><br>
+                G: (-10, 34); R: (-26, 140)
+            </figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/self_portrait.jpg" alt="self_portrait" style="width:100%">
+            <figcaption><span style="font-family: monospace">self_portrait.tif</span><br>
+                G: (28, 78); R: (36, 176)
+            </figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/tobolsk.jpg" alt="tobolsk" style="width:100%">
+            <figcaption><span style="font-family: monospace">tobolsk.jpg</span><br>
+                G: (3, 3); R: (3, 6)
+            </figcaption>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/three_generations.jpg" alt="three_generations" style="width:100%">
+            <figcaption><span style="font-family: monospace">three_generations.tif</span><br>
+                G: (14, 54); R: (12, 112)
+            </figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/train.jpg" alt="train" style="width:100%">
+            <figcaption><span style="font-family: monospace">train.tif</span><br>
+                G: (6, 42); R: (32, 88)
+            </figcaption>
+        </div>
+    </div>
+
+  </body>
+
+</html>
