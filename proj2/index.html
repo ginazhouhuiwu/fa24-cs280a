@@ -305,10 +305,12 @@
     <h3>2.4: Multiresolution Blending</h3>
 
     <p>
-        Each blended layer is calculated from
+        Start with a Gaussian stack of an image mask and two Laplacian stacks of the target images.
+        Each blended layer is the calculated with
         <span style="font-family: monospace">im1[i] * mask[i] + im2[i] * (1 - mask[i])</span>. The last layer is the sum of
-        all the blended Laplacian stack along with the last Gaussian layer. I found that I had the best results via
-        fine-grained adjustments and smaller kernels, as shown by the more subtle blurring between levels.
+        all the blended Laplacian stack along with the last image Gaussian layers (i.e. lowest resolution base layer).
+        I found that with I had the best results via less levels,
+        fine-grained adjustments, and details extracted from smaller kernels, as shown by the more subtle blurring between levels.
     </p>
 
     <img src="media/24-apple-half.png" alt="apple half" style="width:100%">
