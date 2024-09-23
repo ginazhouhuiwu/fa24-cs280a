@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>CS 180/280A Project 2</title>
+
+    <style>
+        * {
+          box-sizing: border-box;
+        }
+        
+        .column {
+          float: left;
+          width: 33.33%;
+          padding: 5px;
+        }
+ 
+        /* Clearfix (clear floats) */
+        .row::after {
+          content: "";
+          clear: both;
+          display: table;
+        }
+
+        figcaption {
+        text-align: center;
+        }
+
+    </style>
+</head>
+
+<body>
+
+    <h1>CS 180/280A Project 2: Fun with Filters and Frequencies</h1>
+    <h2>Gina Wu (Fall 2024)</h2>
+
+    <p>
+        This project explores 2D convolutions, filtering, and image manipulation in the frequency domain.
+    </p>
+    <hr>
+
+    <h2>Part 1: Filters</h2>
+
+    <h3>1.1: Finite Difference Operator</h3>
+
+    <p>
+        First, I show the image partial derivatives <span style="font-family: monospace">Fx, Fy</span> with respect to the x and y axes.
+        This is done by 2D convolutions with the finite difference operators.
+    </p>
+
+    <img src="media/11-dxdy.png" alt="partial derivatives" style="width:100%">
+
+    <p>
+        Gradient magnitude is computed as <span style="font-family: monospace">sqrt(Fx ** 2 + Fy ** 2)</span>.
+        The gradient image has the following stats: <span style="font-family: monospace">min: 0.000 | max: 360.624 | mean: 9.098</span>.
+        To binarize, I set the threshold at pixel value 80.
+    </p>
+
+    <img src="media/11-grad.png" alt="gradient magnitude" style="width:100%">
+
+    <h3>1.2: Derivative of Gaussian (DoG) Filter</h3>
+
+    <p>
+        I convolve the original image with a 5x5 Gaussian kernel to get a blurred image. Then, I calculate partial derivatives
+        with difference operators the same as before.
+    </p>
+
+    <img src="media/12-dxdy.png" alt="partial derivatives" style="width:100%">
+
+    <p>
+        The gradient image has the following stats: <span style="font-family: monospace">min: 0.000 | max: 175.655 | mean: 5.865</span>.
+        Notice that the maximum value decreases significantly, indicating a reduction in noisy pixels. Qualitatively, we see this difference
+        in the deeper, more defined edges of the partial derivatives, as well as the smoother gradient magnitude. The final 
+        binarized image has smoother, thicker, and more solid lines compared to the previous part. The chosen threshold is 28.
+    </p>
+
+    <img src="media/12-grad.png" alt="gradient magnitude" style="width:100%">
+
+    <p>
+        We can also convolve the Gaussian kernel with the difference operators before applying to the image.
+        Since convolutions are commutative and associative, this yields the same results.
+    </p>
+
+    <img src="media/12-commute.png" alt="convolutions are commutative" style="width:100%">
+
+    <p>
+        Below I display the DoG X and Y filters as images. Experimentally, I used the 5x5 kernels. The 500x500 kernels are only shown
+        to better illustrate the filter at a higher resolution.
+    </p>
+
+    <img src="media/12-dog-filters.png" alt="gaussian filters" style="width:100%">
+
+    <hr>
+
+    <h2>Part 2: Frequencies</h2>
+
+    <h3>2.1: Image "Sharpening"</h3>
+    
+    <p>
+        High frequency features can be extracted from an image by subtracting a blurred version from the original image.
+        The sharpen operation with an unsharp mask is derived as follows, with 
+        Gaussian blurring filter <span style="font-family: monospace">G</span>, 
+        identity mask <span style="font-family: monospace">I</span>,
+        and hyperparameter <span style="font-family: monospace">alpha</span> for controlling the amount of sharpening.
+    </p>
+
+    <pre>
+        sharpened = original + alpha x high_freq_features
+        sharpened = original + alpha x (original - original * G)
+        sharpened = original + alpha x original * (I - G)
+    </pre>
+
+    <p>
+        I show results of sharpened low resolution images with varying hyperparameter values. Natural photos
+        perform well with <span style="font-family: monospace">alpha < 5</span>. 
+        Illustrations tend to yield many artifacts. Pictures with motion blur need higher <span style="font-family: monospace">alpha</span>
+        values to have significant improvement.
+    </p>
+
+    <img src="media/21-taj.png" alt="taj" style="width:100%">
+    <img src="media/21-ocean.png" alt="ocean" style="width:100%">
+    <img src="media/21-puppy.png" alt="puppy" style="width:100%">
+    <img src="media/21-turbo.png" alt="turbo" style="width:100%">
+    <img src="media/21-mitsuha.png" alt="mitsuha" style="width:100%">
+    <img src="media/21-moon.png" alt="moon" style="width:100%">
+
+    <p>
+        For evaluation, I blur a sharp image and try to resharpen it with my implementation. The resharpened eiffel tower image
+        looks much more contrasted than the original. Some of the features are inevitably lost after the Gaussian blur, 
+        but the resharpened image restored a lot of the initial structure. The results on my cat Turbo are difficult to evaluate
+        since he is so fluffy, but one can make out more defined furs on the sharpened images. In other words, he is 
+        looking very sharp.
+    </p>
+
+    <img src="media/21-eiffel-tower-sharp.png" alt="eiffel tower" style="width:100%">
+    <img src="media/21-sharp-turbo.png" alt="sharp turbo" style="width:100%">
+
+    <h3>2.2: Hybrid Images</h3>
+
+    <p>
+        To create hybrid images, I pass one image through a lowpass (Gaussian) filter and the other through a highpass (identity - Gaussian)
+        filter to extract the respective low and high frequency features. The combined image is an addition of the extracted features.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/22-derek.jpg" alt="derek" style="width:100%">
+            <figcaption>Derek</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/22-nutmeg.jpg" alt="nutmeg" style="width:100%">
+            <figcaption>Nutmeg</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/22-dermeg-gray.jpg" alt="hybrid" style="width:100%">
+            <figcaption>Dermeg</figcaption>
+        </div>
+    </div>
+
+    <p>
+        The Fourier analysis of grayscale images is shown below in log scale.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/22-fourier-derek.png" alt="derek" style="width:100%">
+            <figcaption>Derek</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/22-fourier-nutmeg.png" alt="nutmeg" style="width:100%">
+            <figcaption>Nutmeg</figcaption>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/22-fourier-low-freq-derek.png" alt="low freq derek" style="width:100%">
+            <figcaption>Low Frequency Derek</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/22-fourier-high-freq-nutmeg.png" alt="high freq nutmeg" style="width:100%">
+            <figcaption>High Frequency Nutmeg</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/22-fourier-grayhybrid.png" alt="hybrid" style="width:100%">
+            <figcaption>Hybrid</figcaption>
+        </div>
+    </div>
+
+    <p>
+        Below are some more results. I think the lion with my cat Agave is a very nice result, since their facial expressions
+        line up perfectly. I also like the way the floppy ears of the real and the crochet bunnies align, as well as their colors.
+        The one with Peepo and Agave is a failure case. I cannot get it to look nice despite how much the parameters are tuned, 
+        since Peepo's face is so much wider and the green color is very hard to compensate for.
+    </p>
+    
+    <hr>
+    <div class="row">
+        <div class="column">
+            <img src="media/22-angry-agave.jpg" alt="angry agave" style="width:100%">
+            <figcaption>Angry Agave</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/22-lion-roar.jpg" alt="lion roar" style="width:100%">
+            <figcaption>Lion</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/22-liongave.jpg" alt="hybrid" style="width:100%">
+            <figcaption>Liongave</figcaption>
+        </div>
+    </div>
+    <hr>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/22-real-bunny.jpg" alt="real bunny" style="width:100%">
+            <figcaption>Real Bunny</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/22-bunny-crochet.jpg" alt="crochet bunny" style="width:100%">
+            <figcaption>Crochet Bunny</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/22-bunny.jpg" alt="hybrid" style="width:100%">
+            <figcaption>Bunny</figcaption>
+        </div>
+    </div>
+    <hr>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/22-annoyed-agave.jpg" alt="annoyed agave" style="width:100%">
+            <figcaption>Annoyed Agave</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/22-angry-peepo.jpg" alt="angry peepo" style="width:100%">
+            <figcaption>Angry Peepo</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/22-peepogave.jpg" alt="hybrid" style="width:100%">
+            <figcaption>Peepogave</figcaption>
+        </div>
+    </div>
+    <hr>
+
+    <p>
+        I implemented the bells & whistles for this section by filtering all the color channels. Colors tend to improve
+        the look of the hybrid image when there are already overlapping colors.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/22-dermeg.jpg" alt="hybrid colored" style="width:100%">
+            <figcaption>Dermeg Colored</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/22-dermeg-gray.jpg" alt="hybrid gray" style="width:100%">
+            <figcaption>Dermeg Gray</figcaption>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/22-bunny.jpg" alt="hybrid colored" style="width:100%">
+            <figcaption>Bunny Colored</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/22-bunny_gray.jpg" alt="hybrid gray" style="width:100%">
+            <figcaption>Bunny Gray</figcaption>
+        </div>
+    </div>
+
+    <h3>2.3: Gaussian and Laplacian Stacks</h3>
+
+    <p>
+        The Gaussian stack is a set of lowpass filtered images, where the Gaussian filter is applied successively.
+        The Laplacian stack is a set of bandpass images and consists of differences between consecutive levels on the 
+        Gaussian stack with all the mid-band frequencies. Each of the displayed depths are normalized for visualization
+        on the Laplacian stack. <br><br>
+        
+        The following are displayed: apple Gaussian stack, apple Laplacian stack, orange
+        Gaussian stack, and orange Laplacian stack. The last layer of the Laplacian stack (last Gaussian layer) is not 
+        shown here, but will be used for part 2.4.
+    </p>
+
+    <img src="media/23-apple-gaussian.png" alt="apple gaussian" style="width:100%">
+    <img src="media/23-apple-laplacian.png" alt="apple laplacian" style="width:100%">
+    <img src="media/23-orange-gaussian.png" alt="orange gaussian" style="width:100%">
+    <img src="media/23-orange-laplacian.png" alt="orange laplacian" style="width:100%">
+
+
+    <h3>2.4: Multiresolution Blending</h3>
+
+    <p>
+        Each blended layer is calculated from
+        <span style="font-family: monospace">im1[i] * mask[i] + im2[i] * (1 - mask[i])</span>. The last layer is the sum of
+        all the blended Laplacian stack along with the last Gaussian layer. I found that I had the best results via
+        fine-grained adjustments and smaller kernels, as shown by the more subtle blurring between levels.
+    </p>
+
+    <img src="media/24-apple-half.png" alt="apple half" style="width:100%">
+    <img src="media/24-orange-half.png" alt="orange half" style="width:100%">
+    <img src="media/24-blended-half.png" alt="blended" style="width:100%">
+    <img src="media/24-orapple.png" alt="orapple" style="width:100%">
+
+    <p>
+        Here are some more blending results. I was very happy with how well the fruit slices lined up! I got
+        the corgi picture and mask from the Segment Anything demo. The corgi doesn't need to be 'blended' into 
+        the background as much, so I set the Gaussian kernel for the mask to be very small for this image.
+    </p>
+
+    <img src="media/24-orakingewi.png" alt="orakingewi" style="width:100%">
+    <img src="media/24-mj-dunks-on-corgi.png" alt="mj dunks on corgi" style="width:100%">     
+
+  </body>
+
+</html>
