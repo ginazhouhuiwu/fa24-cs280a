@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>CS 180/280A Project 3</title>
+
+    <style>
+        * {
+          box-sizing: border-box;
+        }
+        
+        .column {
+          float: left;
+          width: 33.33%;
+          padding: 5px;
+        }
+ 
+        /* Clearfix (clear floats) */
+        .row::after {
+          content: "";
+          clear: both;
+          display: table;
+        }
+
+        figcaption {
+        text-align: center;
+        }
+
+    </style>
+</head>
+
+<body>
+
+    <h1>CS 180/280A Project 3: Face Morphing</h1>
+    <h2>Gina Wu (Fall 2024)</h2>
+
+    <p>
+        In this project, I morph my face into someone else's, compute the mean face of a population dataset, 
+        and extrapolate from the mean to create caricatures. Morphing is defined by geometric warping as well as 
+        color cross-dissolving.
+    </p>
+    <hr>
+
+    <h2>Part 1: Defining Correspondences</h2>
+
+    <p>
+        I picked an image of myself and a headshot of Kate Moss. Using photoshop, I remove the background of both images,
+        roughly line up the faces, and crop them to the same dimensions for a smoother morph.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/gina.png" alt="gina" style="width:80%">
+            <figcaption>Gina</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/kate.png" alt="kate" style="width:80%">
+            <figcaption>Kate</figcaption>
+        </div>
+    </div>
+
+    <p>
+        I manually define correspondence points on the images using the 
+        <a href="https://cal-cs180.github.io/fa23/hw/proj3/tool.html">labeling tool</a> that a former 180 student kindly
+        provided. I compute the average between the correspondence pairs and define a single triangulation with
+        <span style="font-family: monospace">scipy.spatial.Delaunay</span>.
+        The four corner points are chosen so the triangulation covers the entire picture including the background.
+        This is important for smoothness in later steps.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/gina_triangulation.png" alt="gina-tri" style="width:80%">
+            <figcaption>Gina Triangulation</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/kate_triangulation.png" alt="kate-tri" style="width:80%">
+            <figcaption>Kate Triangulation</figcaption>
+        </div>
+    </div>
+    <hr>
+
+    <h2>Part 2: Computing the "Mid-way Face"</h2>
+    
+    <p>
+        As an intermediate step, I compute the mid-way face. This involves three main steps:
+    </p>
+
+    <ol type="1">
+        <li>Compute the average keypoint between correspondence pairs (i.e. average shape)</li>
+        <li>Warp both faces into the average shape</li>
+        <li>Average the image colors (i.e. cross-dissolving)</li>
+    </ol>
+
+    <p>
+        The most involved portion is step 2. Given the triangulation, original image points and mid-way points,
+        I compute the affine transformation <span style="font-family: monospace">A</span> between each corresponding triangle, from the original to the target. 
+        Then, I obtain every pixel within the target triangle using <span style="font-family: monospace">skimage.draw.polygon</span>.
+        Applying inverse warping here, I transform these target points back to the original image through multiplication
+        with the inverse affine transformation matrix <span style="font-family: monospace">A_inv</span>. This brings the 
+        points back to the original image basis, but the pixel coordinates are not guaranteed to be integer values, 
+        barring simple color mapping. So, I interpolate
+        the color for each pixel using <span style="font-family: monospace">scipy.interpolate.griddata</span> and 
+        nearest neighbor method.
+        Importantly, every point and pixel value of the original image are passed in the interpolation function, so the 
+        resulting colors can be smooth.<br><br>
+
+        Here are results of warping my face and Kate's face to the intermediate geometry, and the combination of the
+        two with colors cross-dissolved. I purposely chose two faces with very different shape and coloration to
+        demonstrate the changes better. A fun observation is in the eye color of the combined mid-face. My eyes take 
+        on a very slightly blue-black hue during interpolation and Kate's eyes are hazel.
+        Since my eyes are much closer together than Kate's, the overlapping face has very large eyes that almost look blueish, 
+        making the resulting face look very ambiguous and interesting. The result can look different if I were to meticulously
+        define correspondence points around the pupils, but I actually really enjoy how the eyes look!
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/gina_morphed_50.jpg" alt="gina-50" style="width:100%">
+            <figcaption>Gina Morphed to Mid-face Geometry</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/kate_morphed_50.jpg" alt="kate-50" style="width:100%">
+            <figcaption>Kate Morphed to Mid-face Geometry</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/gina_kate_morphed_50.jpg" alt="kate-tri" style="width:100%">
+            <figcaption>Mid-face (Warped Geometry and Cross-dissolved)</figcaption>
+        </div>
+    </div>
+    <hr>
+
+    <h2>Part 3: The Morph Sequence</h2>
+
+    <p>
+        I define <span style="font-family: monospace">morph(im1, im2, im1_pts, im2_pts, tri, warp_frac, dissolve_frac)</span>,
+        allowing for intermediate percentages of warping and dissolving at different time steps. 
+        Varying them at equally space intervals, I form the morph sequence with 25 images.
+    </p>
+
+    <img src="media/gina_kate.gif" alt="gina kate morph" style="width:35%">
+    <hr>
+
+    <h2>Part 4: The "Mean Face" of a Population</h2>
+
+    <p>
+        Given the Danes dataset, I calculate the average shape of the entire population and subpopulations of male and female. 
+        I choose only images with suffixes <span style="font-family: monospace">-1m.jpg</span> and <span style="font-family: monospace">-1f.jpg</span>,
+        since these all have similar neutral face expressions. Pre-existing correspondence points are defined and extracted from the dataset. 
+        Below is an example of the average triangulation over the whole population.
+    </p>
+
+    <img src="media/danes_avg_triangulation.png" alt="gina kate morph" style="width:50%">
+
+    <p>
+        Here is the population breakdown: 
+        <span style="font-family: monospace">population: 40 | male population: 33 | female population: 7</span>.
+        It is very male dominated, so the average population face is very similar to the male subpopulation.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/avg_face.jpg" alt="avg" style="width:100%">
+            <figcaption>Average Face</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/avg_face_male.jpg" alt="avg male" style="width:100%">
+            <figcaption>Average Male Face</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/avg_face_female.jpg" alt="avg female" style="width:100%">
+            <figcaption>Average Female Face</figcaption>
+        </div>
+    </div>
+
+    <p>
+        I also compute the morph sequence of a few select faces into the average face of the entire population.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/01-1m.gif" alt="01-1m" style="width:100%">
+            <figcaption>
+                <span style="font-family: monospace">01-1m.jpg</span>
+                Morphed into Average
+            </figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/11-1m.gif" alt="11-1m" style="width:100%">
+            <figcaption><span style="font-family: monospace">11-1m.jpg</span>
+                Morphed into Average
+            </figcaption>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/14-1f.gif" alt="14-1f" style="width:100%">
+            <figcaption>
+                <span style="font-family: monospace">14-1f.jpg</span>
+                Morphed into Average
+            </figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/35-1f.gif" alt="35-1f" style="width:100%">
+            <figcaption><span style="font-family: monospace">35-1f.jpg</span>
+                Morphed into Average
+            </figcaption>
+        </div>
+    </div>
+
+    <p>
+        The female morphs look somewhat awkward, so I also morph them into the average female subpopulation face,
+        which look much better. Compared to male samples, these are more blurry due to sparsity of data.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/14-1f-female.gif" alt="14-1f" style="width:100%">
+            <figcaption>
+                <span style="font-family: monospace">14-1f.jpg</span>
+                Morphed into Average Female
+            </figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/35-1f-female.gif" alt="35-1f" style="width:100%">
+            <figcaption><span style="font-family: monospace">35-1f.jpg</span>
+                Morphed into Average Female
+            </figcaption>
+        </div>
+    </div>
+
+    <p>
+        Finally, this is my face morphed into the average Danes dataset face and the female subpopulation average.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/gina-morphed.jpg" alt="gina danes" style="width:100%">
+            <figcaption>
+                Gina Morphed into Average Danes
+            </figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/gina-morphed-female.jpg" alt="gina female danes" style="width:100%">
+            <figcaption>
+                Gina Morphed into Average Female Danes
+            </figcaption>
+        </div>
+    </div>
+
+    <p>
+        Along with the results of warping just the facial geometries.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/gina-to-danes.jpg" alt="gina to danes" style="width:100%">
+            <figcaption>
+                Gina Warped into Average Danes Geometry
+            </figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/danes-to-gina.jpg" alt="danes to gina" style="width:100%">
+            <figcaption>
+                Average Danes Warped into Gina Geometry
+            </figcaption>
+        </div>
+    </div>
+    <hr>
+
+    <h2>Part 5: Caricatures - Extrapolating from the Mean</h2>
+
+    <p>
+        I create caricatures of my face by extrapolating outside the normal warp range from the average face,
+        exaggerating certain features by over-warping to that geometry. The warping over-emphasize towards
+        either set of facial features. As shown, when the extrapolation is towards the Danes average, the jawline
+        is broad and nose is shortened. When extrapolated towards my facial geometry, the eyebrows are thick and 
+        jaw is pointy.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/gina-caricature-1.jpg" alt="gina caricature 1" style="width:100%">
+            <figcaption>
+                Caricature Warping Towards Danes Average
+            </figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/gina-caricature-2.jpg" alt="gina caricature 2" style="width:100%">
+            <figcaption>
+                Caricature Warping Towards Gina
+            </figcaption>
+        </div>
+    </div>
+    <hr>
+ 
+    <h2>Bells & Whistles</h2>
+
+    <p>
+        I change the ethnicity of my face to Brazilian using an average Brazilian woman's face that I found online. 
+        I go through the steps of morphing to change both the facial geometry and colors. The results show my face warped 
+        into the average Brazilian woman's face geometry, as well as a mid-face morph. The biggest difference is seen 
+        in the rounder face shape and shorter forehead. The cross-dissolved colors really tied the changes together!
+    </p>
+
+    <div class="row"></div>
+        <div class="column">
+            <img src="media/brazil-woman.png" alt="avg brazil" style="width:100%">
+            <figcaption>
+                Average Brazilian Woman
+            </figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/gina_warped_brazil.jpg" alt="gina warp brazil" style="width:100%">
+            <figcaption>
+                Gina Warped into Average Brazilian Woman
+            </figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/gina_morphed_brazil.jpg" alt="gina morph brazil" style="width:100%">
+            <figcaption>
+                Gina Morphed into Average Brazilian Woman
+            </figcaption>
+        </div>
+    </div>
+    <hr>
+
+
+
+
+    
+
+</body>
+
+</html>
