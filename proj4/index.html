@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>CS 180/280A Project 4</title>
+
+    <style>
+        * {
+          box-sizing: border-box;
+        }
+        
+        .column {
+          float: left;
+          width: 33.33%;
+          padding: 5px;
+        }
+ 
+        /* Clearfix (clear floats) */
+        .row::after {
+          content: "";
+          clear: both;
+          display: table;
+        }
+
+        figcaption {
+        text-align: center;
+        }
+
+    </style>
+</head>
+
+<body>
+
+    <h1>CS 180/280A Project 4: [Auto]Stitching Photo Mosaics</h1>
+    <h2>Gina Wu (Fall 2024)</h2>
+
+    <p>
+        This project creates a pipeline for automatically stitching images together to create a larger panoramic image.
+    </p>
+    <hr>
+
+    <h2>Part A: Image Warping and Mosaicing</h2>
+
+    <p>
+        In the first part, I create image mosaics through projective warping and pyramid blending on images with manually labeled correspondence points
+    </p>
+
+    <h3>1: Shoot Pictures</h3>
+
+    <p>
+        For the dataset, I take images that significantly overlap from the same pivot point in consistent lighting conditions.
+        This will help the later projection steps look more seamless.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/2-1.jpg" alt="im" style="width:80%">
+        </div>
+
+        <div class="column">
+            <img src="media/2-2.jpg" alt="im" style="width:80%">
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/3-1.jpg" alt="im" style="width:80%">
+        </div>
+
+        <div class="column">
+            <img src="media/3-2.jpg" alt="im" style="width:80%">
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/4-1.jpg" alt="im" style="width:80%">
+        </div>
+
+        <div class="column">
+            <img src="media/4-2.jpg" alt="im" style="width:80%">
+        </div>
+    </div>
+
+    <h3>2: Recover Homographies</h3>
+
+    <p>
+        The homography transformation is a 3x3 matrix with 8 degrees of freedom.
+        With a set of correspondence points <span style="font-family: monospace">{(x, y), (x', y')}</span>, we can formulate
+        the problem as such in the matrix equation form <span style="font-family: monospace">Ha = b</span>. Note that we are
+        operating in homogeneous coordinates, so the coordinates must be normalized later on.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/math1.png" alt="im" style="width:50%">
+        </div>
+    </div>
+
+    <p>
+        This is simply a system of linear equations that can be expanded:
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/math2.png" alt="im" style="width:30%">
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/math3.png" alt="im" style="width:50%">
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/math4.png" alt="im" style="width:50%">
+        </div>
+    </div>
+
+    <p>
+        Rewrite in matrix form:
+    </p>
+
+
+    <div class="row">
+        <div class="column">
+            <img src="media/math5.png" alt="im" style="width:80%">
+        </div>
+    </div>
+
+    <p>
+        We can now plug in manually labeled correspondence points to calculate the homography transformation
+        for any set of images. I stack the points in matrix form and use least squares to estimate the homography matrix.
+        I used the <a href="https://cal-cs180.github.io/fa23/hw/proj3/tool.html">labeling tool</a>
+        from project 3 to establish the correspondences.
+    </p>
+
+    <h3>3: Warp Images</h3>
+
+    <p>
+        I use inverse warping similar to project 3. I calculate the forward and backward homography transformation matrices
+        separately (instead of directly calculate the inverse) to work around the normalization. Then, I identify the corner points
+        of the input image and use the forward homography matrix to map it to a new warped "bounding box". The new bounds might
+        consist of negative coordinates, so I also shift them so they are all positive. With the bounding box coordinates,
+        I obtain every pixel in the newly warped constraints via <span style="font-family: monospace">skimage.draw.polygon</span>
+        and interpolate each pixel to a color in the original image with <span style="font-family: monospace">scipy.interpolate.griddata</span>.
+        These steps are very similar to what was done in project 3, but some care must be taken in normalizing the coordinates 
+        and shifting the bounding box correctly.
+    </p>
+
+    <h3>4: Image Rectification</h3>
+
+    <p>
+        I test the correctness of my warping implementation by rectifying images. The corner points for the daisy granny
+        square and the textbook are manually chosen. The final warped shape is also chosen according to the square or rectangle
+        dimensions.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/rect-2.jpg" alt="im" style="width:100%">
+            <figcaption>Daisy Granny Square</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/rect-2-points.png" alt="im" style="width:100%">
+            <figcaption>Corner Points</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/rect-2-result.jpg" alt="im" style="width:100%">
+            <figcaption>Rectification</figcaption>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/rect-0.jpg" alt="im" style="width:100%">
+            <figcaption>Textbook</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/rect-0-points.png" alt="im" style="width:100%">
+            <figcaption>Corner Points</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/rect-0-result.jpg" alt="im" style="width:100%">
+            <figcaption>Rectification</figcaption>
+        </div>
+    </div>
+
+    <h3>5: Mosaic Blending</h3>
+
+    <p>
+        For every set of images, I warp one image to the other unchanged target image. If we naively add the images together,
+        the overlapping region will be very apparent and bright as shown here.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/2-1-mosaic.png" alt="im" style="width:100%">
+            <figcaption>Image 1 Warped</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/2-2-mosaic.png" alt="im" style="width:100%">
+            <figcaption>Image 2 Target</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/2-naive-mosaic.png" alt="im" style="width:100%">
+            <figcaption>Naive Mosaic</figcaption>
+        </div>
+    </div>
+
+    <p>
+        In order to blend, I calculate a mask based on the distance transform. Every pixel is mapped to one side or the other
+        based on its value in the corresponding distance transform. I show the results of this mask creation below, take note 
+        of the coordinates in the overlapping region.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/2-1-dist-transform.png" alt="im" style="width:100%">
+            <figcaption>Image 1 Distance Transform</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/2-2-dist-transform.png" alt="im" style="width:100%">
+            <figcaption>Image 2 Distance Transform</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/2-mask.png" alt="im" style="width:100%">
+            <figcaption>Combined Mask</figcaption>
+        </div>
+    </div>
+
+    <p>
+        With the mask, I blend the warped image with the target using a Laplacian stack from project 2!
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/2-1.jpg" alt="im" style="width:100%">
+            <figcaption>Image 1</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/2-2.jpg" alt="im" style="width:100%">
+            <figcaption>Image 2</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/4a-mosaic-3-result.jpg" alt="im" style="width:100%">
+            <figcaption>Mosaic</figcaption>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/3-1.jpg" alt="im" style="width:100%">
+            <figcaption>Image 1</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/3-2.jpg" alt="im" style="width:100%">
+            <figcaption>Image 2</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/4a-mosaic-1-result.jpg" alt="im" style="width:100%">
+            <figcaption>Mosaic</figcaption>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/4-1.jpg" alt="im" style="width:100%">
+            <figcaption>Image 1</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/4-2.jpg" alt="im" style="width:100%">
+            <figcaption>Image 2</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/4a-mosaic-2-result.jpg" alt="im" style="width:100%">
+            <figcaption>Mosaic</figcaption>
+        </div>
+    </div>
+
+    <hr>
+    <h2>Part B: Feature Matching for Autostitching</h2>
+
+    <p>
+        In the second part, I implement a system for automatically stitching images into a mosaic 
+        as proposed by Brown et al. in "Multi-Image Matching using Multi-Scale Oriented Patched" (2005).
+    </p>
+
+    <h3>1: Corner Detection</h3>
+
+    <p>
+        I retrieve the corners with the provided code, which uses <span style="font-family: monospace">skimage.feature.corner_harris</span>.
+        The corner detector function first calculates the second moment Harris matrix from Gaussian image gradients and uses its eigenvalues to compute the 
+        corner strength/response function. Each value in the Harris matrix can then be classified as either a flat region, an edge,
+        or a corner. Below, I show the Harris response images (brightness correlates with corner feature weight) as well as
+        the Harris corner points overlaid on the original images.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/4b-2-1-hresponse.png" alt="im" style="width:80%">
+            <figcaption>Image 1 Harris Response</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/4b-2-2-hresponse.png" alt="im" style="width:80%">
+            <figcaption>Image 2 Harris Response</figcaption>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/4b-2-1-corners.png" alt="im" style="width:80%">
+            <figcaption>Image 1 Harris Corners</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/4b-2-2-corners.png" alt="im" style="width:80%">
+            <figcaption>Image 2 Harris Corners</figcaption>
+        </div>
+    </div>
+
+    <p>
+        The target images have resolutions below 1000 on each side, but we still achieve number of corners in the magnitude of 
+        thousands naively. As shown above, things like my cats' facial features and words on my computer screen are perfectly outlined 
+        with the corner detector. These features are not always useful and computational cost of matching is superlinear, so we
+        would like to restrict the number of extracted interest points.
+    </p>
+
+    <h3>2: Adaptive Non-Maximal Suppression</h3>
+
+    <p>
+        Here, I implement Adaptive Non-Maximal Suppression (ANMS) to select a fixed number of interest points. 
+        Instead of naively suppressing points that don't have enough corner strength, ANMS suppresses points with neighbors
+        that have a sufficiently larger strength. As a result, ANMS is not simply choosing the brights points in the Harris response matrix,
+        and is therefore more robust and obtains a more uniform spatial distribution of interest points. In implementation,
+        I calculate the suppression radius around each point in the Harris response matrix and return the top 500.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/4b-2-1-anms.png" alt="im" style="width:80%">
+            <figcaption>Image 1 Interest Points After ANMS</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/4b-2-2-anms.png" alt="im" style="width:80%">
+            <figcaption>Image 2 Interest Points After ANMS</figcaption>
+        </div>
+    </div>
+
+    <h3>3: Feature Descriptor Extraction</h3>
+
+    <p>
+        Now I extract features from the 500 interest points. As described in the paper, I find 40x40 patches around
+        each interest point and downsample it to 8x8 for blurry feature patches. The patches are also normalized to 
+        mean 0 and std 1. Some example features of corners and edges are shown.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/4b-feature-2.png" alt="im" style="width:80%">
+        </div>
+
+        <div class="column">
+            <img src="media/4b-feature-3.png" alt="im" style="width:80%">
+        </div>
+
+        <div class="column">
+            <img src="media/4b-feature-4.png" alt="im" style="width:80%">
+        </div>
+    </div>
+
+    <h3>4: Feature Matching</h3>
+
+    <p>
+        I match the features according to the paper. For every feature in one image, I find its two nearest neighbors according
+        to L2 distance. With the L2 distance as the error, I calculate Lowe's ratio 
+        <span style="font-family: monospace">err_nearest_first / err_nearest_second</span>. If this ratio is below some indicated
+        threshold (I used 0.5), then the feature pair is considered a match. Otherwise, I discard the pairing. This helps eliminate 
+        a lot of false positive matches. <br><br>
+
+        Here are some examples of matched features patches:
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/4b-matched-features-patches-1.png" alt="im" style="width:100%">
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/4b-matched-features-patches-2.png" alt="im" style="width:100%">
+        </div>
+    </div>
+
+    <p>
+        Examples of automatically matched correspondences:
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/4b-matched-features-2.png" alt="im" style="width:180%">
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/4b-matched-features-3.png" alt="im" style="width:180%">
+        </div>
+    </div>
+
+    <p>
+        The correspondences look good and a lot of noise is eliminated. However, there are still incorrect
+        matches. We want to make sure that the homography calculation is robust against outliers.
+    </p>
+
+    <h3>5: RANSAC</h3>
+
+    <p>
+        RANSAC is implemented to make the least-squares homography calculation more robust. The RANSAC loop proceeds as follows:
+        randomly sample 4 matches, compute the exact homography, compute inliers (correctly transformed points), and exit the loop
+        after some number of iterations with the largest set of inliers. The final homography is calculated with this largest set
+        of inliers.
+    </p>
+
+    <h3>6: Mosaic with Autostitching</h3>
+
+    <p>
+        Finally, everything is combined for a fully automatic mosaic creation pipeline! Here I show the results of both part A and B.
+    </p>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/4a-mosaic-3-result.jpg" alt="im" style="width:100%">
+            <figcaption>Manual Correspondences</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/4b-mosaic-3-result.jpg" alt="im" style="width:100%">
+            <figcaption>Autostitching</figcaption>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/4a-mosaic-1-result.jpg" alt="im" style="width:100%">
+            <figcaption>Manual Correspondences</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/4b-mosaic-1-result.jpg" alt="im" style="width:100%">
+            <figcaption>Autostitching</figcaption>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="column">
+            <img src="media/4a-mosaic-2-result.jpg" alt="im" style="width:100%">
+            <figcaption>Manual Correspondences</figcaption>
+        </div>
+
+        <div class="column">
+            <img src="media/4b-mosaic-2-result.jpg" alt="im" style="width:100%">
+            <figcaption>Autostitching</figcaption>
+        </div>
+    </div>
+
+    <p>
+        You can definitely see the differences in warping and projection from manual correspondence points and autostitching,
+        particularly in the first and third set of images. The results from part B appear much more consistent. For example,
+        focus on the lights in the first set of results: the manual correspondence points result in an awkward puzzling
+        that cannot be fully aligned, while autostitching returns a seamless blend!
+    </p>
+
+    <hr>
+    <p>
+        This project was really satisfying to see come together. My biggest frustration was with image rectification in part A.
+        I found that even when the homography calculation was correct, choosing only four corners of a square or rectangle 
+        resulted in very high variance results. The final rectified image could fail even when the original image or 
+        manual correspondences were off by a little. I found this part to be very unreliable to debug, because I couldn't always
+        tell if it was a code or data issue. <br><br>
+
+        In comparison, I found part B to be much easier overall. The paper was very easy to read and straightforward to implement
+        and debug, and it was really cool to work so closely with a classic computer vision paper! The algorithms requiring 
+        nearest neighbor calculations were also surprisingly fast to compute.
+    </p>
+    
+    
+</body>
+
+</html>
