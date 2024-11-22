@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>CS 180/280A Project 5</title>
+
+    <style>
+        * {
+          box-sizing: border-box;
+        }
+        
+        .column {
+          float: left;
+          width: 33.33%;
+          padding: 5px;
+        }
+ 
+        /* Clearfix (clear floats) */
+        .row::after {
+          content: "";
+          clear: both;
+          display: table;
+        }
+
+        figcaption {
+          text-align: center;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px; 
+            padding: 20px;
+        }
+
+        .item {
+            text-align: center;
+        }
+
+        .item img {
+            width: 100%;
+            height: auto;
+        }
+
+        .item .caption {
+            margin-top: 5px;
+            font-size: 14px;
+            color: #555;
+        }
+
+    </style>
+</head>
+
+<body>
+
+    <h1>CS 180/280A Project 5: Fun with Diffusion Models</h1>
+    <h2>Gina Wu (Fall 2024)</h2>
+
+    <p>
+        This project creates a pipeline for automatically stitching images together to create a larger panoramic image.
+    </p>
+    <hr>
+
+    <h2>Part A: The Power of Diffusion Models</h2>
+
+    <p>
+        In the first part, I experiment with pre-trained diffusion models, implement diffusion sampling loops, 
+        and use them for tasks including inpainting and creating optical illusions.<br><br>
+        
+        Note: seed=42 for all results shown.
+    </p>
+
+    <h2>0: Setup</h2>
+
+    <p>
+        I load the 2-stage DeepFloyd IF model from Hugging Face, which is a text-to-image model. 
+        Below are some examples of the model usage with given prompts. Notice the quality of generated images
+        becomes better with higher inference steps, especially in the first set of realistic images.
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/0-man-hat-20steps.png" alt="im" style="width:80%">
+            <figcaption>'a man wearing a hat' (step=20)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/0-man-hat-50steps.png" alt="im" style="width:80%">
+            <figcaption>'a man wearing a hat' (step=50)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/0-man-hat-100steps.png" alt="im" style="width:80%">
+            <figcaption>'a man wearing a hat' (step=100)</figcaption>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/0-rocket-ship-20steps.png" alt="im" style="width:80%">
+            <figcaption>'a rocket ship' (step=20)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/0-rocket-ship-50steps.png" alt="im" style="width:80%">
+            <figcaption>'a rocket ship' (step=50)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/0-rocket-ship-100steps.png" alt="im" style="width:80%">
+            <figcaption>'a rocket ship' (step=100)</figcaption>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/0-snowy-mountain-20steps.png" alt="im" style="width:80%">
+            <figcaption>'an oil painting of a snowy mountain village' (step=20)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/0-snowy-mountain-50steps.png" alt="im" style="width:80%">
+            <figcaption>'an oil painting of a snowy mountain village' (step=50)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/0-snowy-mountain-100steps.png" alt="im" style="width:80%">
+            <figcaption>'an oil painting of a snowy mountain village' (step=100)</figcaption>
+        </div>
+    </div>
+
+    <h2>1: Sampling Loops</h2>
+
+    <h3>1.1: Implementing the Forward Process</h3>
+
+    <p>
+        The two main stages of diffusion are the forward and the reverse processes. Here I implement 
+        the forward process, which takes in a clean image and adds randomly sampled Gaussian noise scaled 
+        by values from a noise schedule (given by the pre-trained model).
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/7-0-campanile.png" alt="im" style="width:80%">
+            <figcaption>Campanile</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/1-noisy-250steps.png" alt="im" style="width:80%">
+            <figcaption>Noisy Campanile (t=250)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/1-noisy-500steps.png" alt="im" style="width:80%">
+            <figcaption>Noisy Campanile (t=500)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/1-noisy-750steps.png" alt="im" style="width:80%">
+            <figcaption>Noisy Campanile (t=750)</figcaption>
+        </div>
+    </div>
+
+    <h3>1.2: Classical Denoising</h3>
+
+    <p>
+        Naively denoising images with a Gaussian blur filter does not work very well. I tried very hard 
+        here to recover the images with different kernel sizes, but the results are still very noisy.
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/1-noisy-250steps.png" alt="im" style="width:80%">
+            <figcaption>Noisy Campanile (t=250)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/1-noisy-500steps.png" alt="im" style="width:80%">
+            <figcaption>Noisy Campanile (t=500)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/1-noisy-750steps.png" alt="im" style="width:80%">
+            <figcaption>Noisy Campanile (t=750)</figcaption>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/2-blurred-250steps.png" alt="im" style="width:80%">
+            <figcaption>Gaussian Blur Denoising (t=250, kernel_size=11)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/2-blurred-500steps.png" alt="im" style="width:80%">
+            <figcaption>Gaussian Blur Denoising (t=500, kernel_size=15)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/2-blurred-750steps.png" alt="im" style="width:80%">
+            <figcaption>Gaussian Blur Denoising (t=750, kernel_size=21)</figcaption>
+        </div>
+    </div>
+
+    <h3>1.3: One-Step Denoising</h3>
+
+    <p>
+        I can use the pretrained diffusion model to denoise in a single step. For each noisy image,
+        I estimate the noise by passing it through the model along with the text embedding for the prompt
+        "a high quality photo". Then I remove the noise by reversing the forward process in one step.<br><br>
+
+        The results are much better than simply applying a blurring filter, but still not very sharp.
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/1-noisy-250steps.png" alt="im" style="width:80%">
+            <figcaption>Noisy Campanile (t=250)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/1-noisy-500steps.png" alt="im" style="width:80%">
+            <figcaption>Noisy Campanile (t=500)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/1-noisy-750steps.png" alt="im" style="width:80%">
+            <figcaption>Noisy Campanile (t=750)</figcaption>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/3-one-step-denoise-250steps.png" alt="im" style="width:80%">
+            <figcaption>One-Step Denoised Campanile (t=250)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/3-one-step-denoise-500steps.png" alt="im" style="width:80%">
+            <figcaption>One-Step Denoised Campanile (t=500)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/3-one-step-denoise-750steps.png" alt="im" style="width:80%">
+            <figcaption>One-Step Denoised Campanile (t=750)</figcaption>
+        </div>
+    </div>
+
+    <h3>1.4: Iterative Denoising</h3>
+
+    <p>
+        With iterative denoising, I start with the noisy image at the last time step, and step forward 
+        in time to recover the clean image in strides. The image gets recovered gradually as time steps decrease.    
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/4-90.png" alt="im" style="width:80%">
+            <figcaption>Noisy Campanile (t=90)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/4-240.png" alt="im" style="width:80%">
+            <figcaption>Noisy Campanile (t=240)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/4-390.png" alt="im" style="width:80%">
+            <figcaption>Noisy Campanile (t=390)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/4-540.png" alt="im" style="width:80%">
+            <figcaption>Noisy Campanile (t=540)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/4-690.png" alt="im" style="width:80%">
+            <figcaption>Noisy Campanile (t=690)</figcaption>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/7-0-campanile.png" alt="im" style="width:80%">
+            <figcaption>Original</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/4-final.png" alt="im" style="width:80%">
+            <figcaption>Iteratively Denoised Campanile</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/4-one-step-denoise.png" alt="im" style="width:80%">
+            <figcaption>One-Step Denoised Campanile</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/4-gaussian-blurred.png" alt="im" style="width:80%">
+            <figcaption>Gaussian Blurred Campanile</figcaption>
+        </div>
+    </div>
+
+    <h3>1.5: Diffusion Model Sampling</h3>
+
+    <p>
+        We can also randomly sample from pure noise iteratively.
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/5-generated-im1.png" alt="im" style="width:80%">
+            <figcaption>Sample 1</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/5-generated-im2.png" alt="im" style="width:80%">
+            <figcaption>Sample 2</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/5-generated-im3.png" alt="im" style="width:80%">
+            <figcaption>Sample 3</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/5-generated-im4.png" alt="im" style="width:80%">
+            <figcaption>Sample 4</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/5-generated-im5.png" alt="im" style="width:80%">
+            <figcaption>Sample 5</figcaption>
+        </div>
+    </div>
+
+    <h3>1.6: Classifier-Free Guidance (CFG)</h3>
+
+    <p>
+        Here sampling is improved with classifier-free guidance, which involves calculating
+        both a conditional and an unconditional noise estimate. The results have higher 
+        diversity and quality.
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/6-cfg-im1.png" alt="im" style="width:80%">
+            <figcaption>Sample 1 with CFG</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/6-cfg-im2.png" alt="im" style="width:80%">
+            <figcaption>Sample 2 with CFG</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/6-cfg-im3.png" alt="im" style="width:80%">
+            <figcaption>Sample 3 with CFG</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/6-cfg-im4.png" alt="im" style="width:80%">
+            <figcaption>Sample 4 with CFG</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/6-cfg-im5.png" alt="im" style="width:80%">
+            <figcaption>Sample 5 with CFG</figcaption>
+        </div>
+    </div>
+
+    <h3>1.7: Image-to-image Translation</h3>
+
+    <p>
+        Here we look at the task of editing. Following the SDEdit algorithm, I run the forward process 
+        to get a noisy image, and then run the iterative denoising algorithm. The results show a series of
+        edits progressively closer to the target image.
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/7-0-sdedit-campanile-level1.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=1)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-0-sdedit-campanile-level3.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=3)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-0-sdedit-campanile-level5.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=5)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-0-sdedit-campanile-level7.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=7)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-0-sdedit-campanile-level10.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=10)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-0-sdedit-campanile-level20.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=20)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-0-campanile.png" alt="im" style="width:80%">
+            <figcaption>Campanile Original</figcaption>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/7-0-sdedit-donut-level1.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=1)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-0-sdedit-donut-level3.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=3)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-0-sdedit-donut-level5.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=5)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-0-sdedit-donut-level7.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=7)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-0-sdedit-donut-level10.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=10)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-0-sdedit-donut-level20.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=20)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-0-donut.png" alt="im" style="width:80%">
+            <figcaption>Donut Original</figcaption>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/7-0-sdedit-cat-level1.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=1)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-0-sdedit-cat-level3.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=3)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-0-sdedit-cat-level5.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=5)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-0-sdedit-cat-level7.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=7)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-0-sdedit-cat-level10.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=10)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-0-sdedit-cat-level20.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=20)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-0-cat.png" alt="im" style="width:80%">
+            <figcaption>Cat Original</figcaption>
+        </div>
+    </div>
+
+    <h4>1.7.1: Editing Hand-Drawn and Web Images</h4>
+
+    <p>
+        We can do the same thing to pictures and web images, which tend to look better than real images.
+        I particularly like the flower drawing one here and how the shape and colors show up in each edit.
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/7-1-web-image-cat-level1.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=1)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-1-web-image-cat-level3.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=3)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-1-web-image-cat-level5.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=5)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-1-web-image-cat-level7.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=7)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-1-web-image-cat-level10.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=10)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-1-web-image-cat-level20.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=20)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-1-web-image-cat.png" alt="im" style="width:80%">
+            <figcaption>Web Image Cat</figcaption>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/7-1-drawing-flower-level1.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=1)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-1-drawing-flower-level3.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=3)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-1-drawing-flower-level5.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=5)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-1-drawing-flower-level7.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=7)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-1-drawing-flower-level10.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=10)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-1-drawing-flower-level20.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=20)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-1-drawing-flower.png" alt="im" style="width:80%">
+            <figcaption>Hand Drawn Flower</figcaption>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/7-1-drawing-person-level1.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=1)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-1-drawing-person-level3.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=3)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-1-drawing-person-level5.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=5)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-1-drawing-person-level7.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=7)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-1-drawing-person-level10.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=10)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-1-drawing-person-level20.png" alt="im" style="width:80%">
+            <figcaption>SDEdit (i_start=20)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-1-drawing-person.png" alt="im" style="width:80%">
+            <figcaption>Hand Drawn Person</figcaption>
+        </div>
+    </div>
+
+    <h4>1.7.2: Inpainting</h4>
+
+    <p>
+        For inpainting, I mask out a part of an image and force the model to have the same pixels everywhere 
+        else by adding them in after each denoising step, in order to preserve the rest of the photo.
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/7-2-campanile.png" alt="im" style="width:80%">
+            <figcaption>Campanile</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-2-campanile-mask.png" alt="im" style="width:80%">
+            <figcaption>Mask</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-2-campanile-to-replace.png" alt="im" style="width:80%">
+            <figcaption>To Replace</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-2-inpaint-campanile.png" alt="im" style="width:80%">
+            <figcaption>Inpainted</figcaption>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/7-2-berkeley.png" alt="im" style="width:80%">
+            <figcaption>Berkeley</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-2-berkeley-mask.png" alt="im" style="width:80%">
+            <figcaption>Mask</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-2-berkeley-to-replace.png" alt="im" style="width:80%">
+            <figcaption>To Replace</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-2-inpaint-berkeley.png" alt="im" style="width:80%">
+            <figcaption>Inpainted</figcaption>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/7-2-cat.png" alt="im" style="width:80%">
+            <figcaption>Cat</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-2-cat-mask.png" alt="im" style="width:80%">
+            <figcaption>Mask</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-2-cat-to-replace.png" alt="im" style="width:80%">
+            <figcaption>To Replace</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-2-inpaint-cat.png" alt="im" style="width:80%">
+            <figcaption>Inpainted</figcaption>
+        </div>
+    </div>
+
+    <h4>1.7.3: Text-Conditional Image-to-image Translation</h4>
+
+    <p>
+        We can also guide SDEdit with a text prompt. The first photo input is the campanile with the text prompt
+        "rocket ship", the second is a cat with the prompt "photo of a dog", and the third is a 
+        hand-drawn flower with the prompt "oil painting of a campfire". I like how you can see the model 
+        recovering the shape of the cat in the second series of photos, and the colors in the third. 
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/7-3-text-sdedit-campanile-rocket-ship-level1.png" alt="im" style="width:80%">
+            <figcaption>Rocket Ship (i_start=1)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-3-text-sdedit-campanile-rocket-ship-level3.png" alt="im" style="width:80%">
+            <figcaption>Rocket Ship (i_start=3)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-3-text-sdedit-campanile-rocket-ship-level5.png" alt="im" style="width:80%">
+            <figcaption>Rocket Ship (i_start=5)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-3-text-sdedit-campanile-rocket-ship-level7.png" alt="im" style="width:80%">
+            <figcaption>Rocket Ship (i_start=7)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-3-text-sdedit-campanile-rocket-ship-level10.png" alt="im" style="width:80%">
+            <figcaption>Rocket Ship (i_start=10)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-3-text-sdedit-campanile-rocket-ship-level20.png" alt="im" style="width:80%">
+            <figcaption>Rocket Ship (i_start=20)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-0-campanile.png" alt="im" style="width:80%">
+            <figcaption>Campanile</figcaption>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/7-3-text-sdedit-cat-dog-level1.png" alt="im" style="width:80%">
+            <figcaption>Dog (i_start=1)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-3-text-sdedit-cat-dog-level3.png" alt="im" style="width:80%">
+            <figcaption>Dog (i_start=3)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-3-text-sdedit-cat-dog-level5.png" alt="im" style="width:80%">
+            <figcaption>Dog (i_start=5)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-3-text-sdedit-cat-dog-level7.png" alt="im" style="width:80%">
+            <figcaption>Dog (i_start=7)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-3-text-sdedit-cat-dog-level10.png" alt="im" style="width:80%">
+            <figcaption>Dog (i_start=10)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-3-text-sdedit-cat-dog-level20.png" alt="im" style="width:80%">
+            <figcaption>Dog (i_start=20)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-0-cat.png" alt="im" style="width:80%">
+            <figcaption>Cat</figcaption>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/7-3-text-sdedit-flower-oilpainting-campfire-level1.png" alt="im" style="width:80%">
+            <figcaption>Campfire (i_start=1)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-3-text-sdedit-flower-oilpainting-campfire-level3.png" alt="im" style="width:80%">
+            <figcaption>Campfire (i_start=3)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-3-text-sdedit-flower-oilpainting-campfire-level5.png" alt="im" style="width:80%">
+            <figcaption>Campfire (i_start=5)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-3-text-sdedit-flower-oilpainting-campfire-level7.png" alt="im" style="width:80%">
+            <figcaption>Campfire (i_start=7)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-3-text-sdedit-flower-oilpainting-campfire-level10.png" alt="im" style="width:80%">
+            <figcaption>Campfire (i_start=10)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-3-text-sdedit-flower-oilpainting-campfire-level20.png" alt="im" style="width:80%">
+            <figcaption>Campfire (i_start=20)</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/7-1-drawing-flower.png" alt="im" style="width:80%">
+            <figcaption>Flower</figcaption>
+        </div>
+    </div>
+
+    <h3>1.8 Visual Anagrams</h3>
+
+    <p>
+        Visual anagrams are photos that look different when flipped. This is simple to implement, where we 
+        just flip the input image and calculate two different noise estimates. I noticed that simply
+        taking the average is not enough sometimes, probably due to some model bias, so for some results I took
+        an emperical weighted average of the noises.
+        I think all the photos here 
+        turned out really well, and I really like the hipster barista holding a coffee cup!
+    </p>
+
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/8-flip-illusion-oilpainting-campfire.png" alt="im" style="width:50%">
+            <figcaption>'an oil painting of people around a campfire'</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/8-flip-illusion-oilpainting-old-man.png" alt="im" style="width:50%">
+            <figcaption>'an oil painting of an old man'</figcaption>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/8-flip-illusion-hipster-barista.png" alt="im" style="width:50%">
+            <figcaption>'a photo of a hipster barista'</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/8-flip-illusion-skull.png" alt="im" style="width:50%">
+            <figcaption>'a lithograph of a skull'</figcaption>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/8-flip-illusion-dog.png" alt="im" style="width:50%">
+            <figcaption>'a photo of a dog'</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/8-flip-illusion-man-hat.png" alt="im" style="width:50%">
+            <figcaption>'a man wearing a hat'</figcaption>
+        </div>
+    </div>
+
+    <h3>1.9 Hybrid Images</h3>
+
+    <p>
+        Hybrid images are created by taking noises from two different text prompts and adding 
+        one's low frequency features and the other's high frequency features. I loved the way the 
+        first three hybrid images turned out. I think having the prompt styles match (e.g. watercolor in photo 3)
+        really helps, but also I had to experiment a lot with various text prompts. The watercolor sunset 
+        and beach is a failure case, where the two prompts "blended in" with each other rather than having them
+        show up at different viewing distances.
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-a/9-hybrid-skull-waterfalls.png" alt="im" style="width:80%">
+            <figcaption>Hybrid image of a skull and a waterfall</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/9-rocket-snowy-village.png" alt="im" style="width:80%">
+            <figcaption>Hybrid image of a rocket and a snowy village</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/9-watercolor-cat-bird.png" alt="im" style="width:80%">
+            <figcaption>Hybrid image of a watercolor cat and bird</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-a/9-watercolor-sunset-beach.png" alt="im" style="width:80%">
+            <figcaption>Hybrid image of a watercolor sunset and beach</figcaption>
+        </div>
+    </div>
+
+
+    <hr>
+    <h2>Part B: Diffusion Models from Scratch</h2>
+
+    <p>
+        In the second part, I implement and train my own diffusion models from scratch on the MNIST dataset.
+    </p>
+
+    <h2>1: Training a Single-Step Denoising UNet</h2>
+
+    <p>
+        The first objective is to directly predict a clean image from a noisy image. 
+        We can formulate our objective as follows:
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-b/1-1-problem.png" alt="im" style="width:30%">
+        </div>
+    </div>
+
+    <p>
+        For this task, I created a noisy MNIST dataset by manually adding Gaussian noise to the torch MNIST dataset.
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-b/1-2-mnist-noisy.png" alt="im" style="width:100%">
+        </div>
+    </div>
+
+    <h3>1.1: Implementing the UNet</h3>
+
+    <p>
+        The UNet architecture consists of a series of downsampling layers, followed by a bottleneck, 
+        and upsampling back to input size.
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-b/1-1-unet.png" alt="im" style="width:100%">
+        </div>
+    </div>
+    
+    <h3>1.2: Using the UNet to Train a Denoiser</h3>
+
+    <p>
+        Training is straightforward and the loss curve is quite smooth. Here I show the results
+        of denoising after the first and fifth epoch of training.
+    </p>
+
+    <h4>1.2.1: Training</h3>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-b/1-2-train-loss.png" alt="im" style="width:100%">
+        </div>
+    </div>
+
+    <p>
+        Epoch 1:
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-b/1-2-epoch1-im1.png" alt="im" style="width:100%">
+        </div>
+        <div class="item">
+            <img src="media/part-b/1-2-epoch1-im2.png" alt="im" style="width:100%">
+        </div>
+        <div class="item">
+            <img src="media/part-b/1-2-epoch1-im3.png" alt="im" style="width:100%">
+        </div>
+    </div>
+
+    <p>
+        Epoch 5:
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-b/1-2-epoch5-im1.png" alt="im" style="width:100%">
+        </div>
+        <div class="item">
+            <img src="media/part-b/1-2-epoch5-im2.png" alt="im" style="width:100%">
+        </div>
+        <div class="item">
+            <img src="media/part-b/1-2-epoch5-im3.png" alt="im" style="width:100%">
+        </div>
+    </div>
+
+    <h4>1.2.2: Out-of-Distribution Testing</h3>
+
+    <p>
+        We trained on noise level of 0.5, but the model performs reasonably well on other noise levels.
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-b/1-2-out-of-distribution-im1.png" alt="im" style="width:100%">
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-b/1-2-out-of-distribution-im2.png" alt="im" style="width:100%">
+        </div>
+    </div>
+    
+    <h2>2: Training a Diffusion Model</h2>
+
+    <p>
+        Now we change the problem objective to predict noise. This is a more difficult problem,
+        but more rubust as it allows us to sample from a pure noise image. This is the new objective function:
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-b/2-1-problem.png" alt="im" style="width:30%">
+        </div>
+    </div>
+
+    <h3>2.1: Adding Time-Conditioning to UNet</h3>
+
+    <p>
+        We add time conditioning by injecting it into the decoding blocks through fully connected blocks.
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-b/2-1-unet.png" alt="im" style="width:100%">
+        </div>
+    </div>
+
+    <h4>2.1.1: Training</h4>
+
+    <p>
+       I follow the DDPM algorithm of picking a random clean image, adding in random noise, and training
+       the unet to predict noise.
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-b/2-1-training-alg.png" alt="im" style="width:60%">
+        </div>
+    </div>
+
+    <p>
+        Training is noisier than before as it is a much harder task, but still achieves a good loss trend.
+     </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-b/2-1-train-loss.png" alt="im" style="width:100%">
+        </div>
+    </div>
+
+    <h4>2.1.2: Sampling</h4>
+
+    <p>
+        Now we can sample from pure noise! The results achieve very clean background and definition.
+     </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-b/2-1-sampling-alg.png" alt="im" style="width:60%">
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-b/2-1-epoch1.png" alt="im" style="width:100%">
+            <figcaption>Epoch 1</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-b/2-1-epoch5.png" alt="im" style="width:100%">
+            <figcaption>Epoch 5</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-b/2-1-epoch10.png" alt="im" style="width:100%">
+            <figcaption>Epoch 10</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-b/2-1-epoch15.png" alt="im" style="width:100%">
+            <figcaption>Epoch 15</figcaption>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-b/2-1-epoch20.png" alt="im" style="width:100%">
+            <figcaption>Epoch 20</figcaption>
+        </div>
+    </div>
+
+    <h3>2.2: Adding Class-Conditioning to UNet</h3>
+
+    <p>
+        Sometimes the results from before don't look like anything. We can improve on this by adding class conditioning,
+        which allows us to control the image generation. I did this by adding in two additional
+        fully connected blocks that take in class label as one hot vectors. Dropout is also implemented such that
+        10% of class conditioning is masked out.
+    </p>
+
+    <h4>2.2.1: Training</h4>
+    <p>
+        Training doesn't involve class conditioning.
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-b/2-2-training-alg.png" alt="im" style="width:60%">
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-b/2-2-train-loss.png" alt="im" style="width:100%">
+        </div>
+    </div>
+
+
+    <h4>2.2.2: Sampling</h4>
+
+    <p>
+        During sampling, I used classifier-free guidance by calculating two noises, one without
+        class conditioning and one with conditioning. The results look very good.
+    </p>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-b/2-2-sampling-alg.png" alt="im" style="width:60%">
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-b/2-2-epoch1.png" alt="im" style="width:100%">
+            <figcaption>Epoch 1</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-b/2-2-epoch5.png" alt="im" style="width:100%">
+            <figcaption>Epoch 5</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-b/2-2-epoch10.png" alt="im" style="width:100%">
+            <figcaption>Epoch 10</figcaption>
+        </div>
+        <div class="item">
+            <img src="media/part-b/2-2-epoch15.png" alt="im" style="width:100%">
+            <figcaption>Epoch 15</figcaption>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="item">
+            <img src="media/part-b/2-2-epoch20.png" alt="im" style="width:100%">
+            <figcaption>Epoch 20</figcaption>
+        </div>
+    </div>
+
+    <hr>
+    <p>
+        This project was rewarding, especially in the second part with debugging
+        a model from scratch. There are many components to modeling from the building blocks, to training 
+        and sampling. It was helpful for me to go through the motions of debugging and pinpointing exactly 
+        where to look for mistakes, despite it being painful at times. I also appreciated being able to work
+        with pretrained models in part 1!
+    </p>
+    
+</body>
+
+</html>
