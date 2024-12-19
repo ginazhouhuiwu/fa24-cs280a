@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>CS 180/280A Final Project</title>
+
+    <style>
+        * {
+          box-sizing: border-box;
+        }
+        
+        .column {
+          float: left;
+          width: 33.33%;
+          padding: 5px;
+        }
+ 
+        /* Clearfix (clear floats) */
+        .row::after {
+          content: "";
+          clear: both;
+          display: table;
+        }
+
+        figcaption {
+          text-align: center;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px; 
+            padding: 20px;
+        }
+
+        .item {
+            text-align: center;
+        }
+
+        .item img {
+            width: 100%;
+            height: auto;
+        }
+
+        .item .caption {
+            margin-top: 5px;
+            font-size: 14px;
+            color: #555;
+        }
+
+    </style>
+</head>
+
+<body>
+
+    <h1>Automated Camera Trajectory Planning in 3D Scenes</h1>
+    <h2>Gina Wu (Fall 2024)</h2>
+
+    <p><a href="https://github.com/ginazhouhuiwu/fa24-cs280a-final-proj">[Code]</a>
+    <hr>
+
+    <h2>Abstract</h2>
+    <p>
+        The ability to automatically generate camera trajectories in 3D scenes can revolutionize industries 
+        such as cinematography, game design, and robotics. This work proposes an end-to-end framework that 
+        takes a 3D scene representation as input and generates camera paths that are not only visually compelling, 
+        but also prioritize focusing on key objects and collision avoidance within the scene. The framework is 
+        composed of two core components: keyframe selection, which identifies critical viewpoints, and trajectory 
+        generation, which ensures smooth, collision-free transitions between keyframes. Ongoing and future work 
+        aims to extend this framework by incorporating more advanced techniques for scene understanding, adaptive 
+        cinematographic styles, and user-enabled trajectory adjustments to further enhance its versatility across 
+        use cases.
+    </p>
+
+    <h2>Report</h2>
+    <object class="pdf" 
+            data=
+        "https://media.geeksforgeeks.org/wp-content/cdn-uploads/20210101201653/PDF.pdf"
+            width="800"
+            height="500">
+    </object>
+    
+    <h2>Demo</h2>
+    <video width="640" height="480" controls>
+        <source src="media/runthrough.mp4" type="video/mp4">
+    </video>
+
+    <h2>Examples</h2>
+    <video width="480" height="360" controls>
+        <source src="media/teaparty.mp4" type="video/mp4">
+    </video>
+
+    <video width="480" height="360" controls>
+        <source src="media/figurines.mp4" type="video/mp4">
+    </video>
+
+    <video width="480" height="360" controls>
+        <source src="media/bulldozer.mp4" type="video/mp4">
+    </video>
+
+    
+</body>
+
+</html>
